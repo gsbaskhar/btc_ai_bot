@@ -1,15 +1,46 @@
+import os
 import MetaTrader5 as mt5
 
 from config import *
 
 # ============== INITIALIZE MT5 ================
 
+def _find_mt5_terminal():
+
+    candidates = []
+
+    program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
+    program_files_x86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+
+    candidates.extend([
+        os.path.join(program_files, "MetaTrader 5", "terminal64.exe"),
+        os.path.join(program_files, "MetaTrader 5", "terminal.exe"),
+        os.path.join(program_files_x86, "MetaTrader 5", "terminal64.exe"),
+        os.path.join(program_files_x86, "MetaTrader 5", "terminal.exe"),
+        os.path.join(program_files, "OctaFX", "MetaTrader 5", "terminal64.exe"),
+        os.path.join(program_files, "OctaFX", "MetaTrader 5", "terminal.exe"),
+    ])
+
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return candidate
+
+    return None
+
+
 def initialize_mt5():
 
-    if not mt5.initialize():
+    terminal_path = MT5_PATH or _find_mt5_terminal()
 
+    if terminal_path:
+        initialized = mt5.initialize(path=terminal_path)
+    else:
+        initialized = mt5.initialize()
+
+    if not initialized:
+        error_code, error_message = mt5.last_error()
         raise Exception(
-            f"MT5 INIT FAILED: {mt5.last_error()}"
+            f"MT5 INIT FAILED: ({error_code}) {error_message} - MT5_PATH={MT5_PATH} detected_path={terminal_path}"
         )
 
     info = mt5.symbol_info(SYMBOL)

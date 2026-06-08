@@ -140,13 +140,17 @@ while True:
 
             htf_trend = get_htf_trend(SYMBOL)
 
-            print(f"HTF TREND : {htf_trend}")
+            if ENABLE_HTF_FILTER:
+                print(f"HTF TREND : {htf_trend}")
 
-            if trend != htf_trend:
-
-                print("HTF CONFLICT")
-
-                continue
+                if trend != htf_trend:
+                    print("HTF CONFLICT")
+                    continue
+            else:
+                print(
+                    f"HTF TREND : {htf_trend} "
+                    f"(filter disabled)"
+                )
 
             if ENABLE_AI:
 

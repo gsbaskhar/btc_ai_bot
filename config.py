@@ -36,9 +36,16 @@ TRADE_COOLDOWN = 2
 
 ENABLE_AI = False
 ENABLE_VOLUME_FILTER = False
+ENABLE_HTF_FILTER = False
+ENABLE_SESSION_FILTER = False
 
 OPENAI_MODEL = "gpt-4.1-mini"
 
-# === Stoploss caps (in points) - keep losses small (single-digit points)
-MIN_SL_POINTS = 1
-MAX_SL_POINTS = 10
+# Optional MetaTrader 5 terminal path. Set this if MT5 is installed in a non-standard location.
+# Example:
+# MT5_PATH = r"C:\Program Files\MetaTrader 5\terminal64.exe"
+MT5_PATH = r"C:\Users\Bass\AppData\Roaming\MetaTrader 5\terminal64.exe"
+
+# === Stoploss caps (in points) - adjusted for BTC volatility
+MIN_SL_POINTS = 50
+MAX_SL_POINTS = 1000
