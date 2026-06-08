@@ -17,17 +17,17 @@ def get_breakout_signal(df, trend):
         .mean()
     )
 
-    strong_candle = body > avg_range * 0.05
+    strong_candle = body > avg_range * 0.4
 
     # BREAKOUT
 
-    bullish_breakout = (
-        last.high > prev.high
-    )
+    bullish_breakout = last.close > prev.high
+    bearish_breakout = last.close < prev.low
 
-    bearish_breakout = (
-        last.low < prev.low
-    )
+    if ENABLE_VOLUME_FILTER:
+        volume_ok = df["volume_ratio"].iloc[-1] > 1.2
+    else:
+        volume_ok = True
 
     # DEBUG
 
@@ -41,33 +41,24 @@ def get_breakout_signal(df, trend):
     print(f"Strong     : {strong_candle}")
     print(f"Bull BO    : {bullish_breakout}")
     print(f"Bear BO    : {bearish_breakout}")
-
-    # buy_signal = (
-    #     trend == "BULLISH"
-    #     and last.close > last.ema50
-    #     and bullish_breakout
-    #     and last.rsi > 50
-    #     and strong_candle
-    # )
-
-    # sell_signal = (
-    #     trend == "BEARISH"
-    #     and last.close < last.ema50
-    #     and bearish_breakout
-    #     and last.rsi < 50
-    #     and strong_candle
-    # )
+    print(f"Volume OK  : {volume_ok}")
 
     buy_signal = (
-    trend == "BULLISH"
-    and last.close > last.ema50
-    and last.rsi > 50
+        trend == "BULLISH"
+        and last.close > last.ema50
+        and bullish_breakout
+        and last.rsi > RSI_BUY
+        and strong_candle
+        and volume_ok
     )
 
     sell_signal = (
-    trend == "BEARISH"
-    and last.close < last.ema50
-    and last.rsi < 50
+        trend == "BEARISH"
+        and last.close < last.ema50
+        and bearish_breakout
+        and last.rsi < RSI_SELL
+        and strong_candle
+        and volume_ok
     )
 
     if buy_signal:
