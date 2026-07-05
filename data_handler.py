@@ -1,98 +1,87 @@
-import MetaTrader5 as mt5
-
 import pandas as pd
+
+from binance_connector import client
 
 from config import *
 
-# ============ CONVERT DATAFRAME ============
 
-def convert_dataframe(rates):
+def get_candles(limit=500):
 
-    df = pd.DataFrame(rates)
+    klines = client.futures_klines(
 
-    df['time'] = pd.to_datetime(
+        symbol=SYMBOL,
 
-        df['time'],
+        interval=INTERVAL,
 
-        unit='s'
+        limit=limit
     )
+
+    df = pd.DataFrame(
+
+        klines,
+
+        columns=[
+            "open_time",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "close_time",
+            "quote_asset_volume",
+            "number_of_trades",
+            "taker_buy_base",
+            "taker_buy_quote",
+            "ignore"
+        ]
+    )
+
+    df = df[[
+        "open_time",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume"
+    ]]
+
+    df.rename(
+        columns={
+            "open_time": "time"
+        },
+        inplace=True
+    )
+
+    df["time"] = pd.to_datetime(
+        df["time"],
+        unit="ms"
+    )
+
+    numeric = [
+
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume"
+
+    ]
+
+    df[numeric] = df[numeric].astype(float)
 
     return df
 
-# =============== CLEAN DATA ==============
 
 def clean_data(df):
 
-    # ========= REMOVE DUPLICATES ==========
+    df.dropna(inplace=True)
 
-    df = df.drop_duplicates()
+    df.reset_index(
 
-    # ======== SORT BY TIME ============
+        drop=True,
 
-    df = df.sort_values(
+        inplace=True
 
-        by='time'
     )
-
-    # ========== RESET INDEX ==========
-
-    df = df.reset_index(
-
-        drop=True
-    )
-
-    # ========= REMOVE NaN ==========
-
-    df = df.dropna()
-
-    return df
-
-# ============ GET CANDLES ================
-
-def get_candles(bars=500):
-
-    rates = mt5.copy_rates_from_pos(
-
-        SYMBOL,
-
-        TIMEFRAME,
-
-        0,
-
-        bars
-    )
-
-    # ========== VALIDATION ============
-
-    if rates is None:
-
-        print("NO DATA RECEIVED")
-
-        return None
-
-    if len(rates) == 0:
-
-        print("EMPTY DATA")
-
-        return None
-
-    # ======== CONVERT =====
-
-    df = convert_dataframe(
-
-        rates
-    )
-
-    # ========= CLEAN =========
-
-    df = clean_data(df)
-
-    # ========= FINAL CHECK ==========
-
-    if len(df) < 50:
-
-        print("NOT ENOUGH CANDLES")
-
-        return None
 
     return df

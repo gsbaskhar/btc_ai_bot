@@ -1,40 +1,35 @@
-# add_ema()
-
-# add_rsi()
-
-# add_atr()
-
-# add_volume()
-
-# add_all_indicators()
+import numpy as np
 
 from ta.trend import EMAIndicator
 from ta.trend import MACD
 
 from ta.momentum import RSIIndicator
 
-from ta.volatility import AverageTrueRange
-from ta.volatility import BollingerBands
+from ta.volatility import (
+    AverageTrueRange,
+    BollingerBands
+)
 
 from config import *
 
-# ============= EMA =================
+
+# ===================================
+# EMA
+# ===================================
 
 def add_ema(df):
 
-    close = df['close']
+    df["ema50"] = EMAIndicator(
 
-    df['ema50'] = EMAIndicator(
-
-        close,
+        df["close"],
 
         EMA_FAST
 
     ).ema_indicator()
 
-    df['ema200'] = EMAIndicator(
+    df["ema200"] = EMAIndicator(
 
-        close,
+        df["close"],
 
         EMA_SLOW
 
@@ -42,15 +37,16 @@ def add_ema(df):
 
     return df
 
-# =============== RSI ===============
+
+# ===================================
+# RSI
+# ===================================
 
 def add_rsi(df):
 
-    close = df['close']
+    df["rsi"] = RSIIndicator(
 
-    df['rsi'] = RSIIndicator(
-
-        close,
+        df["close"],
 
         RSI_PERIOD
 
@@ -58,189 +54,240 @@ def add_rsi(df):
 
     return df
 
-# =============== ATR ===================
+
+# ===================================
+# ATR
+# ===================================
 
 def add_atr(df):
 
     atr = AverageTrueRange(
 
-        high=df['high'],
+        high=df["high"],
 
-        low=df['low'],
+        low=df["low"],
 
-        close=df['close'],
+        close=df["close"],
 
         window=ATR_PERIOD
+
     )
 
-    df['atr'] = atr.average_true_range()
+    df["atr"] = atr.average_true_range()
 
     return df
 
-# ============ VOLUME ===============
 
-def add_volume(df):
-
-    df['volume_ma'] = (
-
-        df['tick_volume']
-
-        .rolling(20)
-
-        .mean()
-    )
-
-    df['volume_ratio'] = (
-
-        df['tick_volume']
-
-        / df['volume_ma']
-    )
-
-    return df
-
-# =========== MACD ===============
+# ===================================
+# MACD
+# ===================================
 
 def add_macd(df):
 
     macd = MACD(
 
-        close=df['close'],
+        close=df["close"],
 
-        window_slow=26,
+        window_fast=MACD_FAST,
 
-        window_fast=12,
+        window_slow=MACD_SLOW,
 
-        window_sign=9
+        window_sign=MACD_SIGNAL
+
     )
 
-    df['macd'] = macd.macd()
+    df["macd"] = macd.macd()
 
-    df['macd_signal'] = macd.macd_signal()
+    df["macd_signal"] = macd.macd_signal()
 
-    df['macd_histogram'] = macd.macd_diff()
+    df["macd_hist"] = macd.macd_diff()
 
     return df
 
-# ============ BOLLINGER BANDS =============
+
+# ===================================
+# Bollinger
+# ===================================
 
 def add_bollinger(df):
 
     bb = BollingerBands(
 
-        close=df['close'],
+        close=df["close"],
 
-        window=20,
+        window=BOLLINGER_PERIOD
 
-        window_dev=2
     )
 
-    df['bb_upper'] = bb.bollinger_hband()
+    df["bb_upper"] = bb.bollinger_hband()
 
-    df['bb_middle'] = bb.bollinger_mavg()
+    df["bb_middle"] = bb.bollinger_mavg()
 
-    df['bb_lower'] = bb.bollinger_lband()
+    df["bb_lower"] = bb.bollinger_lband()
 
     return df
 
-# ================ ORDER BLOCKS ==================
+
+# ===================================
+# Volume Ratio
+# ===================================
+
+def add_volume(df):
+
+    df["volume_ma"] = (
+
+        df["volume"]
+
+        .rolling(20)
+
+        .mean()
+
+    )
+
+    df["volume_ratio"] = (
+
+        df["volume"]
+
+        / df["volume_ma"]
+
+    )
+
+    return df
+
+
+# ===================================
+# Order Block
+# ===================================
 
 def add_orderblocks(df):
 
-    df['bullish_ob'] = False
+    df["bullish_ob"] = False
 
-    df['bearish_ob'] = False
+    df["bearish_ob"] = False
 
     for i in range(2, len(df)):
 
-        prev = df.iloc[i - 1]
-
-        current = df.iloc[i]
-
-        # ========= Bullish Order Block ===========
-
         if (
 
-            prev.close < prev.open
+            df["close"].iloc[i]
 
-            and
+            >
 
-            current.close > prev.high
+            df["high"].iloc[i-1]
 
         ):
 
-            df.at[df.index[i - 1], 'bullish_ob'] = True
+            df.loc[
 
-        # ========= Bearish Order Block ===========
+                df.index[i],
+
+                "bullish_ob"
+
+            ] = True
 
         if (
 
-            prev.close > prev.open
+            df["close"].iloc[i]
 
-            and
+            <
 
-            current.close < prev.low
+            df["low"].iloc[i-1]
 
         ):
 
-            df.at[df.index[i - 1], 'bearish_ob'] = True
+            df.loc[
+
+                df.index[i],
+
+                "bearish_ob"
+
+            ] = True
 
     return df
 
-# ============ LIQUIDITY SWEEPS ============
+
+# ===================================
+# Liquidity Sweep
+# ===================================
 
 def add_liquidity(df):
 
-    df['buy_liquidity_sweep'] = False
+    df["buy_liquidity"] = False
 
-    df['sell_liquidity_sweep'] = False
+    df["sell_liquidity"] = False
 
-    for i in range(2, len(df)):
+    for i in range(3, len(df)):
 
-        prev = df.iloc[i - 1]
+        prev_high = max(
 
-        current = df.iloc[i]
+            df["high"].iloc[i-3:i]
 
-        body = abs(
-
-            current.close - current.open
         )
 
-        upper_wick = (
+        prev_low = min(
 
-            current.high
-            -
-            max(current.open, current.close)
+            df["low"].iloc[i-3:i]
+
         )
 
-        lower_wick = (
+        if (
 
-            min(current.open, current.close)
-            -
-            current.low
-        )
+            df["high"].iloc[i]
 
-        # ======== Sell-side liquidity sweep =========
+            >
 
-        if lower_wick > body * 2:
+            prev_high
 
-            df.at[
+            and
+
+            df["close"].iloc[i]
+
+            <
+
+            prev_high
+
+        ):
+
+            df.loc[
+
                 df.index[i],
-                'buy_liquidity_sweep'
+
+                "sell_liquidity"
+
             ] = True
 
-        # ========= Buy-side liquidity sweep =========
+        if (
 
-        if upper_wick > body * 2:
+            df["low"].iloc[i]
 
-            df.at[
+            <
+
+            prev_low
+
+            and
+
+            df["close"].iloc[i]
+
+            >
+
+            prev_low
+
+        ):
+
+            df.loc[
+
                 df.index[i],
-                'sell_liquidity_sweep'
+
+                "buy_liquidity"
+
             ] = True
 
     return df
 
-# =========== ALL INDICATORS ===============
+
+# ===================================
+# ALL
+# ===================================
 
 def add_all_indicators(df):
 
@@ -250,11 +297,11 @@ def add_all_indicators(df):
 
     df = add_atr(df)
 
-    df = add_volume(df)
-
     df = add_macd(df)
 
     df = add_bollinger(df)
+
+    df = add_volume(df)
 
     df = add_orderblocks(df)
 

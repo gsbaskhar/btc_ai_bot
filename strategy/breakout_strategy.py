@@ -1,74 +1,164 @@
 from config import *
 
-# ==========================================
-# BREAKOUT SIGNAL
-# ==========================================
 
 def get_breakout_signal(df, trend):
 
     last = df.iloc[-1]
+
     prev = df.iloc[-2]
 
-    body = abs(last.close - last.open)
+    body = abs(
 
-    avg_range = (
-        (df["high"] - df["low"])
-        .iloc[-10:]
+        last["close"]
+
+        - last["open"]
+
+    )
+
+    avg_body = (
+
+        abs(
+
+            df["close"]
+
+            -
+
+            df["open"]
+
+        )
+
+        .tail(20)
+
         .mean()
+
     )
 
-    strong_candle = body > avg_range * 0.4
+    strong_candle = (
 
-    # BREAKOUT
+        body >=
 
-    bullish_breakout = last.close > prev.high
-    bearish_breakout = last.close < prev.low
+        avg_body * 0.60
 
-    if ENABLE_VOLUME_FILTER:
-        volume_ok = df["volume_ratio"].iloc[-1] > 1.2
-    else:
-        volume_ok = True
+    )
 
-    # DEBUG
+    bullish_breakout = (
 
-    print(f"Close      : {last.close}")
-    print(f"Prev High  : {prev.high}")
-    print(f"Prev Low   : {prev.low}")
-    print(f"EMA50      : {last.ema50}")
-    print(f"RSI        : {last.rsi}")
-    print(f"Body       : {body}")
-    print(f"Avg Range  : {avg_range}")
-    print(f"Strong     : {strong_candle}")
-    print(f"Bull BO    : {bullish_breakout}")
-    print(f"Bear BO    : {bearish_breakout}")
-    print(f"Volume OK  : {volume_ok}")
+        last["close"]
 
-    buy_signal = (
+        >
+
+        prev["high"]
+
+    )
+
+    bearish_breakout = (
+
+        last["close"]
+
+        <
+
+        prev["low"]
+
+    )
+
+    volume_ok = (
+
+        last["volume_ratio"] >= 1.20
+
+    )
+
+    macd_buy = (
+
+        last["macd"]
+
+        >
+
+        last["macd_signal"]
+
+    )
+
+    macd_sell = (
+
+        last["macd"]
+
+        <
+
+        last["macd_signal"]
+
+    )
+
+    buy = (
+
         trend == "BULLISH"
-        and last.close > last.ema50
+
         and bullish_breakout
-        and last.rsi > RSI_BUY
+
         and strong_candle
+
         and volume_ok
+
+        and macd_buy
+
+        and last["bullish_ob"]
+
     )
 
-    sell_signal = (
+    sell = (
+
         trend == "BEARISH"
-        and last.close < last.ema50
+
         and bearish_breakout
-        and last.rsi < RSI_SELL
+
         and strong_candle
+
         and volume_ok
+
+        and macd_sell
+
+        and last["bearish_ob"]
+
     )
 
-    if buy_signal:
-        print("BUY CONDITIONS MET")
+    print("=" * 60)
+
+    print(f"Trend          : {trend}")
+
+    print(f"Close          : {last['close']}")
+
+    print(f"EMA50          : {last['ema50']}")
+
+    print(f"EMA200         : {last['ema200']}")
+
+    print(f"RSI            : {last['rsi']:.2f}")
+
+    print(f"MACD           : {last['macd']:.2f}")
+
+    print(f"MACD SIGNAL    : {last['macd_signal']:.2f}")
+
+    print(f"Volume Ratio   : {last['volume_ratio']:.2f}")
+
+    print(f"Bullish OB     : {last['bullish_ob']}")
+
+    print(f"Bearish OB     : {last['bearish_ob']}")
+
+    print(f"Strong Candle  : {strong_candle}")
+
+    print(f"Bull Breakout  : {bullish_breakout}")
+
+    print(f"Bear Breakout  : {bearish_breakout}")
+
+    print("=" * 60)
+
+    if buy:
+
+        print("BUY SIGNAL")
+
         return "BUY"
 
-    if sell_signal:
-        print("SELL CONDITIONS MET")
-        return "SELL"
+    if sell:
 
-    print("NO SIGNAL CONDITIONS MET")
+        print("SELL SIGNAL")
+
+        return "SELL"
 
     return None
