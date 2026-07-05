@@ -1,69 +1,123 @@
-import MetaTrader5 as mt5
-
+# risk_manager.py
 from config import *
+import MetaTrader5 as mt5
+from datetime import datetime
 
-# ======== SPREAD CHECK ============
+# Make sure MIN_LOT_SIZE and MAX_LOT_SIZE exist
+try:
+    MIN_LOT_SIZE
+except NameError:
+    MIN_LOT_SIZE = 0.01
 
-def spread_ok(tick, symbol_info):
+try:
+    MAX_LOT_SIZE
+except NameError:
+    MAX_LOT_SIZE = 0.10
 
-    spread = (
-        tick.ask - tick.bid
-    ) / symbol_info.point
+def calculate_position_size(price, atr):
+    """Calculate position size based on risk"""
+    
+    account = mt5.account_info()
+    if account is None:
+        return LOT_SIZE
+    
+    # Risk amount (1% of account)
+    risk_amount = account.balance * (RISK_PERCENT / 100)
+    
+    # SL distance in points
+    sl_distance = atr * ATR_MULTIPLIER
+    
+    if sl_distance == 0:
+        sl_distance = 100  # Fallback
+    
+    # Position size
+    lot_size = risk_amount / sl_distance
+    
+    # Adjust for BTC
+    lot_size = lot_size * 0.01
+    
+    # Round to valid lot size
+    lot_size = max(MIN_LOT_SIZE, min(MAX_LOT_SIZE, round(lot_size, 2)))
+    
+    # Safety checks
+    if lot_size < MIN_LOT_SIZE:
+        lot_size = MIN_LOT_SIZE
+    if lot_size > MAX_LOT_SIZE:
+        lot_size = MAX_LOT_SIZE
+    
+    print(f"📊 Position Size: {lot_size:.2f}")
+    print(f"💰 Risk Amount: ${risk_amount:.2f}")
+    print(f"📉 SL Distance: {sl_distance:.2f} pts")
+    
+    return lot_size
 
-    print(f"SPREAD : {spread:.0f}")
 
-    return spread <= MAX_SPREAD
-
-
-# =========== VOLATILITY CHECK =============
-
-def volatility_ok(df):
-
-    atr = df['atr'].iloc[-1]
-
-    print(f"ATR : {atr:.2f}")
-
-    if atr < MIN_ATR:
-        return False
-
-    if atr > MAX_ATR:
-        return False
-
-    return True
-
-
-# ========== SL TP CALCULATION ===============
-
-def calculate_sl_tp(direction, entry, atr):
-    # ATR based stop (price units)
-    sl_distance = atr * 1.5
-
-    # attempt to get symbol point to convert to points
-    try:
-        symbol = mt5.symbol_info(SYMBOL)
-        point = symbol.point if symbol is not None else None
-    except Exception:
-        symbol = None
-        point = None
-
-    # if we have point information, clamp SL in points to keep losses small
-    if point and point > 0:
-        sl_points = sl_distance / point
-
-        # clamp SL to configured min/max points (small single-digit loss)
-        sl_points = max(MIN_SL_POINTS, min(sl_points, MAX_SL_POINTS))
-
-        sl_price_dist = sl_points * point
-
+def calculate_sl_tp(signal, entry, atr):
+    """Calculate SL and TP levels"""
+    
+    sl_distance = atr * ATR_MULTIPLIER
+    
+    if sl_distance < 10:
+        sl_distance = 100  # Minimum stop distance
+    
+    if signal == "BUY":
+        sl = entry - sl_distance
+        tp = entry + (sl_distance * RISK_REWARD)
     else:
-        # fallback to price-based clamps (legacy)
-        sl_price_dist = max(min(sl_distance, 2000), 150)
-
-    if direction == "BUY":
-        sl = entry - sl_price_dist
-        tp = entry + (sl_price_dist * RISK_REWARD)
-    else:
-        sl = entry + sl_price_dist
-        tp = entry - (sl_price_dist * RISK_REWARD)
-
+        sl = entry + sl_distance
+        tp = entry - (sl_distance * RISK_REWARD)
+    
     return sl, tp
+
+
+def check_daily_loss():
+    """Check if daily loss limit is reached"""
+    
+    today = datetime.now()
+    start_of_day = datetime(today.year, today.month, today.day)
+    
+    deals = mt5.history_deals_get(start_of_day, today)
+    if deals is None or len(deals) == 0:
+        return False
+    
+    # Calculate P/L
+    total_loss = 0
+    for deal in deals:
+        if deal.profit < 0:
+            total_loss += abs(deal.profit)
+    
+    account = mt5.account_info()
+    if account is None:
+        return False
+    
+    loss_percent = (total_loss / account.balance) * 100
+    
+    if loss_percent >= MAX_DAILY_LOSS:
+        print(f"⚠️ DAILY LOSS LIMIT REACHED: {loss_percent:.2f}%")
+        return True
+    
+    return False
+
+
+def check_consecutive_losses():
+    """Check consecutive losses"""
+    
+    today = datetime.now()
+    start_of_day = datetime(today.year, today.month, today.day)
+    
+    deals = mt5.history_deals_get(start_of_day, today)
+    if deals is None or len(deals) == 0:
+        return False
+    
+    # Check last trades
+    losses = 0
+    for deal in reversed(deals):
+        if deal.profit < 0:
+            losses += 1
+            if losses >= MAX_CONSECUTIVE_LOSSES:
+                print(f"⚠️ MAX CONSECUTIVE LOSSES REACHED: {losses}")
+                return True
+        else:
+            break
+    
+    return False
