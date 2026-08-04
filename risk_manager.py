@@ -1,123 +1,102 @@
-# risk_manager.py
-from config import *
+"""Risk and broker-aware sizing helpers for MetaTrader 5."""
+from datetime import datetime, timezone
+
 import MetaTrader5 as mt5
-from datetime import datetime
 
-# Make sure MIN_LOT_SIZE and MAX_LOT_SIZE exist
-try:
-    MIN_LOT_SIZE
-except NameError:
-    MIN_LOT_SIZE = 0.01
+from config import *
 
-try:
-    MAX_LOT_SIZE
-except NameError:
-    MAX_LOT_SIZE = 0.10
 
-def calculate_position_size(price, atr):
-    """Calculate position size based on risk"""
-    
+def _symbol_info():
+    info = mt5.symbol_info(SYMBOL)
+    if info is None:
+        raise RuntimeError(f"Symbol unavailable: {SYMBOL}")
+    return info
+
+
+def _round_volume(volume, info):
+    step = info.volume_step or MIN_LOT_SIZE
+    lower = max(MIN_LOT_SIZE, info.volume_min)
+    upper = min(MAX_LOT_SIZE, info.volume_max)
+    volume = max(lower, min(upper, volume))
+    steps = round(volume / step)
+    return round(max(lower, min(upper, steps * step)), 8)
+
+
+def calculate_position_size(entry, stop_loss):
+    """Return volume whose estimated loss at SL is RISK_PERCENT of balance.
+
+    MT5 tick value/tick size are broker supplied, so this works across BTCUSD
+    contract specifications instead of assuming a fixed BTC contract size.
+    """
     account = mt5.account_info()
-    if account is None:
-        return LOT_SIZE
-    
-    # Risk amount (1% of account)
-    risk_amount = account.balance * (RISK_PERCENT / 100)
-    
-    # SL distance in points
-    sl_distance = atr * ATR_MULTIPLIER
-    
-    if sl_distance == 0:
-        sl_distance = 100  # Fallback
-    
-    # Position size
-    lot_size = risk_amount / sl_distance
-    
-    # Adjust for BTC
-    lot_size = lot_size * 0.01
-    
-    # Round to valid lot size
-    lot_size = max(MIN_LOT_SIZE, min(MAX_LOT_SIZE, round(lot_size, 2)))
-    
-    # Safety checks
-    if lot_size < MIN_LOT_SIZE:
-        lot_size = MIN_LOT_SIZE
-    if lot_size > MAX_LOT_SIZE:
-        lot_size = MAX_LOT_SIZE
-    
-    print(f"📊 Position Size: {lot_size:.2f}")
-    print(f"💰 Risk Amount: ${risk_amount:.2f}")
-    print(f"📉 SL Distance: {sl_distance:.2f} pts")
-    
-    return lot_size
+    info = _symbol_info()
+    if account is None or info.trade_tick_size <= 0 or info.trade_tick_value <= 0:
+        return _round_volume(MIN_LOT_SIZE, info)
+
+    stop_distance = abs(entry - stop_loss)
+    loss_per_lot = (stop_distance / info.trade_tick_size) * info.trade_tick_value
+    if loss_per_lot <= 0:
+        return _round_volume(MIN_LOT_SIZE, info)
+
+    risk_amount = account.balance * (RISK_PERCENT / 100.0)
+    volume = _round_volume(risk_amount / loss_per_lot, info)
+    return volume
 
 
-def calculate_sl_tp(signal, entry, atr):
-    """Calculate SL and TP levels"""
-    
-    sl_distance = atr * ATR_MULTIPLIER
-    
-    if sl_distance < 10:
-        sl_distance = 100  # Minimum stop distance
-    
+def calculate_sl_tp(signal, entry, atr, enforce_broker_minimum=True):
+    distance = max(float(atr) * ATR_MULTIPLIER, 1.0)
+    if enforce_broker_minimum:
+        info = _symbol_info()
+        # MT5 rejects stops closer than the symbol's broker-defined stop level.
+        distance = max(distance, max(info.trade_stops_level, info.trade_freeze_level) * info.point)
     if signal == "BUY":
-        sl = entry - sl_distance
-        tp = entry + (sl_distance * RISK_REWARD)
-    else:
-        sl = entry + sl_distance
-        tp = entry - (sl_distance * RISK_REWARD)
-    
-    return sl, tp
+        return entry - distance, entry + distance * RISK_REWARD
+    return entry + distance, entry - distance * RISK_REWARD
 
 
-def check_daily_loss():
-    """Check if daily loss limit is reached"""
-    
-    today = datetime.now()
-    start_of_day = datetime(today.year, today.month, today.day)
-    
-    deals = mt5.history_deals_get(start_of_day, today)
-    if deals is None or len(deals) == 0:
-        return False
-    
-    # Calculate P/L
-    total_loss = 0
-    for deal in deals:
-        if deal.profit < 0:
-            total_loss += abs(deal.profit)
-    
+def _today_deals():
+    now = datetime.now(timezone.utc)
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return mt5.history_deals_get(start, now) or ()
+
+
+def _bot_deals():
+    return [d for d in _today_deals() if d.symbol == SYMBOL and d.magic == MAGIC]
+
+
+def daily_entry_count():
+    return sum(d.entry == mt5.DEAL_ENTRY_IN for d in _bot_deals())
+
+
+def daily_loss_percent():
     account = mt5.account_info()
-    if account is None:
-        return False
-    
-    loss_percent = (total_loss / account.balance) * 100
-    
-    if loss_percent >= MAX_DAILY_LOSS:
-        print(f"⚠️ DAILY LOSS LIMIT REACHED: {loss_percent:.2f}%")
-        return True
-    
-    return False
+    if account is None or account.balance <= 0:
+        return 0.0
+    closed_pnl = sum(
+        d.profit + d.swap + d.commission
+        for d in _bot_deals()
+        if d.entry in (mt5.DEAL_ENTRY_OUT, mt5.DEAL_ENTRY_OUT_BY)
+    )
+    return max(0.0, -closed_pnl / account.balance * 100.0)
 
 
-def check_consecutive_losses():
-    """Check consecutive losses"""
-    
-    today = datetime.now()
-    start_of_day = datetime(today.year, today.month, today.day)
-    
-    deals = mt5.history_deals_get(start_of_day, today)
-    if deals is None or len(deals) == 0:
-        return False
-    
-    # Check last trades
-    losses = 0
-    for deal in reversed(deals):
-        if deal.profit < 0:
-            losses += 1
-            if losses >= MAX_CONSECUTIVE_LOSSES:
-                print(f"⚠️ MAX CONSECUTIVE LOSSES REACHED: {losses}")
-                return True
+def consecutive_losses():
+    exits = [d for d in _bot_deals() if d.entry in (mt5.DEAL_ENTRY_OUT, mt5.DEAL_ENTRY_OUT_BY)]
+    exits.sort(key=lambda d: getattr(d, "time_msc", 0), reverse=True)
+    count = 0
+    for deal in exits:
+        if deal.profit + deal.swap + deal.commission < 0:
+            count += 1
         else:
             break
-    
-    return False
+    return count
+
+
+def trading_allowed():
+    if daily_entry_count() >= MAX_TRADES_PER_DAY:
+        return False, "daily trade limit reached"
+    if daily_loss_percent() >= MAX_DAILY_LOSS_PERCENT:
+        return False, "daily loss limit reached"
+    if consecutive_losses() >= MAX_CONSECUTIVE_LOSSES:
+        return False, "consecutive-loss limit reached"
+    return True, ""

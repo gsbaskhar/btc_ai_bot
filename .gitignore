@@ -1,1 +1,7 @@
 .env
+__pycache__/
+*.py[cod]
+logs/orders.csv
+logs/closed_deals.csv
+reports/*.csv
+backtest_results.csv

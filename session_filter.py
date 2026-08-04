@@ -1,22 +1,8 @@
-from datetime import datetime
-from config import *
+from datetime import datetime, timezone
+from config import LONDON_END_UTC, LONDON_START_UTC, NY_END_UTC, NY_START_UTC
 
-# =========== LONDON + NY SESSION =============
 
-def session_ok():
-    """Check if current time is within trading session"""
-    
-    hour = datetime.now().hour
-    
-    # London Session (7-10 AM GMT)
-    london_session = LONDON_START <= hour <= LONDON_END
-    
-    # NY Session (1-5 PM GMT)
-    ny_session = NY_START <= hour <= NY_END
-    
-    allowed = london_session or ny_session
-    
-    if not allowed:
-        print(f"⏰ Current hour: {hour} (London: {LONDON_START}-{LONDON_END}, NY: {NY_START}-{NY_END})")
-    
-    return allowed
+def session_ok(now=None):
+    """Return whether now falls in the configured UTC London/NY windows."""
+    hour = (now or datetime.now(timezone.utc)).hour
+    return LONDON_START_UTC <= hour <= LONDON_END_UTC or NY_START_UTC <= hour <= NY_END_UTC
