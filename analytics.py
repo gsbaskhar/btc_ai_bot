@@ -1,16 +1,1 @@
-from config import *
-
-def calculate_qty(price):
-
-    qty = (
-
-        USDT_PER_TRADE
-
-        * LEVERAGE
-
-    ) / price
-
-    return round(
-        qty,
-        3
-    )
+"""Performance metrics are generated from logs/closed_deals.csv by report_generator."""

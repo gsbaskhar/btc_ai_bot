@@ -1,79 +1,52 @@
-# config.py
+"""Single source of truth for the MT5 BTCUSD bot."""
 import MetaTrader5 as mt5
 
-# ============================================
-# TRADING SYMBOL & TIMEFRAME
-# ============================================
+# Broker settings: confirm the exact symbol name in your MT5 Market Watch.
 SYMBOL = "BTCUSD"
 TIMEFRAME = mt5.TIMEFRAME_M5
 MAGIC = 555777
+BOT_COMMENT = "BTC_MT5_BOT"
 
-# ============================================
-# POSITION SIZING
-# ============================================
-LOT_SIZE = 0.02
-MAX_LOT_SIZE = 0.10  # UNCOMMENTED
-MIN_LOT_SIZE = 0.01  # UNCOMMENTED
+# Risk. Start on a demo account and keep this deliberately conservative.
+RISK_PERCENT = 0.50
+RISK_REWARD = 2.0
+MIN_LOT_SIZE = 0.01
+MAX_LOT_SIZE = 0.10
+MAX_DAILY_LOSS_PERCENT = 2.0
+MAX_TRADES_PER_DAY = 3
+MAX_CONSECUTIVE_LOSSES = 2
+TRADE_COOLDOWN_BARS = 2
 
-# ============================================
-# RISK MANAGEMENT
-# ============================================
-RISK_PERCENT = 1.0  # Reduced from 1.5
-RISK_REWARD = 3.0   # Increased from 2.5
-MAX_DAILY_LOSS = 2  # Reduced from 3
-MAX_TRADES_PER_DAY = 3  # Reduced from 5
-MAX_CONSECUTIVE_LOSSES = 2  # Reduced from 3
-
-# ============================================
-# INDICATOR SETTINGS
-# ============================================
-EMA_FAST = 20
-EMA_MEDIUM = 50
+# Strategy indicators.
+EMA_FAST = 50
 EMA_SLOW = 200
 RSI_PERIOD = 14
-RSI_OVERBOUGHT = 75  # Increased
-RSI_OVERSOLD = 25    # Decreased
+RSI_OVERBOUGHT = 70
+RSI_OVERSOLD = 30
 ATR_PERIOD = 14
-ATR_MULTIPLIER = 1.8  # Increased
+ATR_MULTIPLIER = 1.8
 MACD_FAST = 12
 MACD_SLOW = 26
 MACD_SIGNAL = 9
 BOLLINGER_PERIOD = 20
-BOLLINGER_STD = 2
+MIN_ATR = 30.0
+MAX_ATR = 5000.0
+MIN_VOLUME_RATIO = 0.9
 
-# ============================================
-# FILTERS
-# ============================================
-MIN_ATR = 30  # Reduced
-MAX_ATR = 5000
-MAX_SPREAD = 3500
-MIN_VOLUME_RATIO = 0.8
-TRADE_COOLDOWN = 2
+# Execution. Values ending in _POINTS use the broker's SYMBOL_POINT.
+MAX_SPREAD_POINTS = 3500
+SLIPPAGE_POINTS = 50
+BREAK_EVEN_TRIGGER_POINTS = 3000
+BREAK_EVEN_OFFSET_POINTS = 100
+TRAILING_TRIGGER_POINTS = 6000
+TRAILING_DISTANCE_POINTS = 3000
 
-# ============================================
-# EXIT CONDITIONS
-# ============================================
-BREAK_EVEN_TRIGGER = 30  # Reduced
-TRAILING_TRIGGER = 60   # Reduced
-TRAILING_DISTANCE = 30  # Reduced
-
-# ============================================
-# FILTER SWITCHES
-# ============================================
-ENABLE_AI = False
+# Optional filters. Session hours are UTC, not machine-local time.
+ENABLE_SESSION_FILTER = False
 ENABLE_HTF_FILTER = False
-ENABLE_SESSION_FILTER = False  # Trade anytime
-ENABLE_VOLUME_FILTER = False
-
-# ============================================
-# AI SETTINGS
-# ============================================
+ENABLE_AI = False
+LONDON_START_UTC = 7
+LONDON_END_UTC = 10
+NY_START_UTC = 13
+NY_END_UTC = 17
 OPENAI_MODEL = "gpt-4.1-mini"
-
-# ============================================
-# SESSION TIMES (London & NY)
-# ============================================
-LONDON_START = 7
-LONDON_END = 10
-NY_START = 13
-NY_END = 17
