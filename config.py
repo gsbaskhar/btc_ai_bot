@@ -8,7 +8,9 @@ MAGIC = 555777
 BOT_COMMENT = "BTC_MT5_BOT"
 
 # Risk. Start on a demo account and keep this deliberately conservative.
-RISK_PERCENT = 0.50
+# Keep live risk small while validating a BTCUSD strategy.  A single trade
+# may still lose; this only caps the intended loss at the stop.
+RISK_PERCENT = 0.25
 RISK_REWARD = 2.0
 MIN_LOT_SIZE = 0.01
 MAX_LOT_SIZE = 0.10
@@ -36,14 +38,19 @@ MIN_VOLUME_RATIO = 0.9
 # Execution. Values ending in _POINTS use the broker's SYMBOL_POINT.
 MAX_SPREAD_POINTS = 3500
 SLIPPAGE_POINTS = 50
-BREAK_EVEN_TRIGGER_POINTS = 3000
-BREAK_EVEN_OFFSET_POINTS = 100
-TRAILING_TRIGGER_POINTS = 6000
-TRAILING_DISTANCE_POINTS = 3000
+# Exit management uses the original stop distance (1R), never a fixed dollar
+# amount.  This lets a 2R target breathe instead of trailing it out after a
+# small BTCUSD fluctuation.
+BREAK_EVEN_TRIGGER_R = 1.0
+BREAK_EVEN_OFFSET_R = 0.10
+TRAILING_TRIGGER_R = 1.5
+TRAILING_DISTANCE_R = 1.0
+TRAILING_STEP_R = 0.25
 
 # Optional filters. Session hours are UTC, not machine-local time.
 ENABLE_SESSION_FILTER = False
-ENABLE_HTF_FILTER = False
+# Take M5 breakouts only in the direction of the completed H1 trend.
+ENABLE_HTF_FILTER = True
 ENABLE_AI = False
 LONDON_START_UTC = 7
 LONDON_END_UTC = 10

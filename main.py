@@ -9,7 +9,7 @@ import MetaTrader5 as mt5
 
 import config
 from indicators import add_all_indicators
-from logger import initialize_log, log_order, sync_closed_deals
+from logger import get_initial_stop, initialize_log, log_order, sync_closed_deals
 from mt5_connector import (
     get_account_info, get_candles, get_positions, get_symbol_info, get_tick,
     initialize_mt5, modify_position, place_order, shutdown_mt5, spread_points,
@@ -21,7 +21,7 @@ from strategy.enhanced_strategy import get_breakout_signal, get_trend
 
 
 def manage_positions():
-    """Move stops only in the profitable direction, using broker point units."""
+    """Manage exits from the original per-trade risk (R), not fixed points."""
     info, tick = get_symbol_info(), get_tick()
     if info is None or tick is None:
         return
@@ -30,22 +30,27 @@ def manage_positions():
     for position in get_positions():
         is_buy = position.type == mt5.POSITION_TYPE_BUY
         market_price = tick.bid if is_buy else tick.ask
-        gain_points = ((market_price - position.price_open) if is_buy else (position.price_open - market_price)) / point
+        initial_sl = get_initial_stop(position.ticket)
+        risk_distance = abs(position.price_open - initial_sl) if initial_sl else 0.0
+        if risk_distance <= 0:
+            print(f"No initial SL recorded for #{position.ticket}; trailing skipped")
+            continue
+        gain = (market_price - position.price_open) if is_buy else (position.price_open - market_price)
         candidate = None
-        if gain_points >= config.BREAK_EVEN_TRIGGER_POINTS:
-            candidate = position.price_open + (config.BREAK_EVEN_OFFSET_POINTS * point if is_buy else -config.BREAK_EVEN_OFFSET_POINTS * point)
-        if gain_points >= config.TRAILING_TRIGGER_POINTS:
-            trailing = market_price - config.TRAILING_DISTANCE_POINTS * point if is_buy else market_price + config.TRAILING_DISTANCE_POINTS * point
+        if gain >= risk_distance * config.BREAK_EVEN_TRIGGER_R:
+            candidate = position.price_open + (risk_distance * config.BREAK_EVEN_OFFSET_R if is_buy else -risk_distance * config.BREAK_EVEN_OFFSET_R)
+        if gain >= risk_distance * config.TRAILING_TRIGGER_R:
+            trailing = market_price - risk_distance * config.TRAILING_DISTANCE_R if is_buy else market_price + risk_distance * config.TRAILING_DISTANCE_R
             candidate = max(candidate or trailing, trailing) if is_buy else min(candidate or trailing, trailing)
         if candidate is None:
             continue
         # Never loosen SL and do not send a stop inside the broker's stop/freeze zone.
         if is_buy:
             candidate = min(candidate, market_price - min_distance)
-            better = position.sl == 0.0 or candidate > position.sl + point / 2
+            better = position.sl == 0.0 or candidate > position.sl + risk_distance * config.TRAILING_STEP_R
         else:
             candidate = max(candidate, market_price + min_distance)
-            better = position.sl == 0.0 or candidate < position.sl - point / 2
+            better = position.sl == 0.0 or candidate < position.sl - risk_distance * config.TRAILING_STEP_R
         if better and modify_position(position.ticket, candidate, position.tp):
             print(f"Trailing stop moved for #{position.ticket} to {candidate:.{info.digits}f}")
 

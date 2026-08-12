@@ -87,11 +87,23 @@ def place_order(direction, volume, sl, tp):
         "magic": MAGIC,
         "comment": BOT_COMMENT,
         "type_time": mt5.ORDER_TIME_GTC,
-        "type_filling": mt5.ORDER_FILLING_IOC,
     }
-    check = mt5.order_check(request)
-    if check is None or check.retcode != 0:
-        print(f"Order pre-check failed: {check}")
+    # Filling modes differ by broker/symbol.  Do not hard-code IOC: Octa's
+    # BTCUSD server rejects it with retcode 10030 (unsupported filling mode).
+    # Validate each commonly supported market-execution mode and send only
+    # with the first mode the server accepts.
+    check = None
+    for filling_mode in (
+        mt5.ORDER_FILLING_FOK,
+        mt5.ORDER_FILLING_IOC,
+        mt5.ORDER_FILLING_RETURN,
+    ):
+        request["type_filling"] = filling_mode
+        check = mt5.order_check(request)
+        if check is not None and check.retcode == 0:
+            break
+    else:
+        print(f"Order pre-check failed for every filling mode: {check}")
         return None
     result = mt5.order_send(request)
     if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
