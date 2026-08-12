@@ -38,10 +38,14 @@ MIN_VOLUME_RATIO = 0.9
 # Execution. Values ending in _POINTS use the broker's SYMBOL_POINT.
 MAX_SPREAD_POINTS = 3500
 SLIPPAGE_POINTS = 50
-BREAK_EVEN_TRIGGER_POINTS = 3000
-BREAK_EVEN_OFFSET_POINTS = 100
-TRAILING_TRIGGER_POINTS = 6000
-TRAILING_DISTANCE_POINTS = 3000
+# Exit management uses the original stop distance (1R), never a fixed dollar
+# amount.  This lets a 2R target breathe instead of trailing it out after a
+# small BTCUSD fluctuation.
+BREAK_EVEN_TRIGGER_R = 1.0
+BREAK_EVEN_OFFSET_R = 0.10
+TRAILING_TRIGGER_R = 1.5
+TRAILING_DISTANCE_R = 1.0
+TRAILING_STEP_R = 0.25
 
 # Optional filters. Session hours are UTC, not machine-local time.
 ENABLE_SESSION_FILTER = False

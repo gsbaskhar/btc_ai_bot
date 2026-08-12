@@ -27,6 +27,33 @@ def log_order(result, direction, volume, sl, tp):
         csv.writer(f).writerow([datetime.now(timezone.utc).isoformat(), result.order, direction, volume, result.price, sl, tp])
 
 
+def get_initial_stop(ticket):
+    """Return the bot-recorded initial SL for a position, if available."""
+    if not os.path.exists(ORDER_LOG):
+        return None
+    with open(ORDER_LOG, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            if row["order_ticket"] == str(ticket):
+                return float(row["sl"])
+    return None
+
+
+def daily_order_count(now=None):
+    """Count today's successful bot entries from the local audit log.
+
+    MT5 account history can lag immediately after an order, so it must not be
+    the sole source for enforcing the daily entry cap.
+    """
+    if not os.path.exists(ORDER_LOG):
+        return 0
+    today = (now or datetime.now(timezone.utc)).date()
+    with open(ORDER_LOG, newline="", encoding="utf-8") as f:
+        return sum(
+            datetime.fromisoformat(row["time_utc"]).date() == today
+            for row in csv.DictReader(f)
+        )
+
+
 def sync_closed_deals():
     """Log each closed deal once, returning its net P/L for the session."""
     _ensure_file(CLOSED_DEAL_LOG, ["deal_ticket", "time_utc", "position_id", "deal_side", "volume", "price", "pnl"])

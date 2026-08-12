@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import MetaTrader5 as mt5
 
 from config import *
+from logger import daily_order_count
 
 
 def _symbol_info():
@@ -65,7 +66,7 @@ def _bot_deals():
 
 
 def daily_entry_count():
-    return sum(d.entry == mt5.DEAL_ENTRY_IN for d in _bot_deals())
+    return daily_order_count()
 
 
 def daily_loss_percent():
