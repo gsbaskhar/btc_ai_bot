@@ -8,7 +8,9 @@ MAGIC = 555777
 BOT_COMMENT = "BTC_MT5_BOT"
 
 # Risk. Start on a demo account and keep this deliberately conservative.
-RISK_PERCENT = 0.50
+# Keep live risk small while validating a BTCUSD strategy.  A single trade
+# may still lose; this only caps the intended loss at the stop.
+RISK_PERCENT = 0.25
 RISK_REWARD = 2.0
 MIN_LOT_SIZE = 0.01
 MAX_LOT_SIZE = 0.10
@@ -43,7 +45,8 @@ TRAILING_DISTANCE_POINTS = 3000
 
 # Optional filters. Session hours are UTC, not machine-local time.
 ENABLE_SESSION_FILTER = False
-ENABLE_HTF_FILTER = False
+# Take M5 breakouts only in the direction of the completed H1 trend.
+ENABLE_HTF_FILTER = True
 ENABLE_AI = False
 LONDON_START_UTC = 7
 LONDON_END_UTC = 10
