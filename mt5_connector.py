@@ -88,10 +88,7 @@ def place_order(direction, volume, sl, tp):
         "comment": BOT_COMMENT,
         "type_time": mt5.ORDER_TIME_GTC,
     }
-    # Filling modes differ by broker/symbol.  Do not hard-code IOC: Octa's
-    # BTCUSD server rejects it with retcode 10030 (unsupported filling mode).
-    # Validate each commonly supported market-execution mode and send only
-    # with the first mode the server accepts.
+    # Filling modes differ by broker/symbol.
     check = None
     for filling_mode in (
         mt5.ORDER_FILLING_FOK,

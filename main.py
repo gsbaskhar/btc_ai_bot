@@ -20,6 +20,19 @@ from session_filter import session_ok
 from strategy.enhanced_strategy import get_breakout_signal, get_trend
 
 
+# FIXED: Track last trade price to avoid repeated entries at same level
+_last_trade_price = None
+_last_trade_bar = -999
+
+
+def _price_too_close(entry_price, min_distance):
+    """FIXED: Check if price is too close to last trade."""
+    global _last_trade_price
+    if _last_trade_price is None:
+        return False
+    return abs(entry_price - _last_trade_price) < min_distance
+
+
 def manage_positions():
     """Manage exits from the original per-trade risk (R), not fixed points."""
     info, tick = get_symbol_info(), get_tick()
@@ -70,11 +83,12 @@ def can_trade(df):
 
 
 def run():
+    global _last_trade_price, _last_trade_bar
+    
     account = initialize_mt5()
     initialize_log()
     print(f"MT5 bot ready | account={account.login} | symbol={config.SYMBOL} | balance={account.balance:.2f}")
     last_bar_time = None
-    last_trade_bar = -999
     bar_number = 0
 
     while True:
@@ -101,11 +115,13 @@ def run():
             if get_positions():
                 print(f"{bar_time}: bot position open; entries paused")
                 continue
+            
             allowed, reason = can_trade(df)
             if not allowed:
                 print(f"{bar_time}: no trade — {reason}")
                 continue
-            if bar_number - last_trade_bar < config.TRADE_COOLDOWN_BARS:
+            
+            if bar_number - _last_trade_bar < config.TRADE_COOLDOWN_BARS:
                 print(f"{bar_time}: no trade — cooldown")
                 continue
 
@@ -113,9 +129,11 @@ def run():
             if trend == "SIDEWAYS":
                 print(f"{bar_time}: no trade — sideways")
                 continue
+            
             if config.ENABLE_HTF_FILTER and get_htf_trend(config.SYMBOL) != trend:
                 print(f"{bar_time}: no trade — H1 trend conflict")
                 continue
+            
             if config.ENABLE_AI:
                 from ai_filter import ask_ai
                 result = ask_ai(df)
@@ -123,27 +141,39 @@ def run():
                     print(f"{bar_time}: no trade — AI filter")
                     continue
 
-            signal = get_breakout_signal(df, trend, debug=True)
+            signal = get_breakout_signal(df, trend, debug=True, bar_index=bar_number)
             if signal is None:
                 print(f"{bar_time}: no qualified signal")
                 continue
+            
             tick = get_tick()
             if tick is None:
                 continue
+            
             entry = tick.ask if signal == "BUY" else tick.bid
+            
+            # FIXED: Check if price is too close to last trade
+            if _price_too_close(entry, config.MIN_DISTANCE_FROM_LAST_TRADE):
+                print(f"{bar_time}: no trade — price too close to last trade ({entry:.2f})")
+                continue
+            
             sl, tp = calculate_sl_tp(signal, entry, df.atr.iloc[-1])
             volume = calculate_position_size(entry, sl)
             result = place_order(signal, volume, sl, tp)
+            
             if result:
                 log_order(result, signal, volume, sl, tp)
-                last_trade_bar = bar_number
+                _last_trade_price = entry
+                _last_trade_bar = bar_number
                 print(f"Opened {signal} #{result.order}: {volume} lots at {result.price}")
+                
         except KeyboardInterrupt:
             print("Bot stopped by user.")
             break
         except Exception as exc:
             print(f"Loop error: {exc}")
             time.sleep(10)
+    
     shutdown_mt5()
 
 
